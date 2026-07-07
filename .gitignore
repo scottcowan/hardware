@@ -1,0 +1,16 @@
+# KiCad
+*.000
+*.bak
+*.kicad_prl
+*-backups/
+fp-info-cache
+
+# FreeCAD
+*.FCBak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# References / datasheets (add manually, keep out of git LFS for now)
+references/*.pdf
