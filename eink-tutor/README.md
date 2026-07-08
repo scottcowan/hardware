@@ -1,47 +1,67 @@
 # E-ink Tutor
 
-Open-hardware educational device with an e-ink display and speech-to-text input. Designed for low-power, always-on use — long battery life, readable in any light, no backlight fatigue.
+Open-hardware AI educational device. Per-child, voice-in, e-ink display, offline-capable with WiFi sync.
+
+A child asks a question by voice. The device transcribes it, routes to an AI tutor (Claude/GPT/Gemma via OpenAI-compatible API), and displays the response on a distraction-free e-ink screen. Follows a structured learning plan, adapts to the child's interests, downloads new content areas over WiFi.
 
 ---
 
-## Concept
+## Hardware Overview
 
-A dedicated learning device: ask a question by voice, receive a clear written response on e-ink. Targeted at education contexts where screen fatigue, distraction, and battery life matter.
+| Component | Detail |
+|---|---|
+| Compute | Raspberry Pi Zero 2W |
+| Display | Waveshare 7.5" e-Paper HAT V2 — 800×480, 124 PPI, greyscale |
+| Touch | GT911 capacitive overlay |
+| Microphone | SPH0645LM4H I2S MEMS, 65dB SNR |
+| Audio out | Piper TTS (offline neural TTS) → PAM8302 amp → 40mm speaker |
+| Wake word | Porcupine (Picovoice) — <5% CPU |
+| Battery | 4400mAh LiPo, ~2-3 day standby |
+| Charging | USB-C, MCP73831 charger IC |
+| Enclosure | 3D-printed, TPU bumper, child-safe |
+
+**Per-device BOM: ~£138**
 
 ---
 
-## Design Goals
+## Software Architecture
 
-- **E-ink display** — sunlight readable, no backlight fatigue, days of battery life
-- **STT input** — speak a question, get a written answer
-- **Local or cloud inference** — small local model for common queries, cloud for depth
-- **Low power** — target >1 week standby, >8hr active use
-- **Simple enclosure** — durable, single-purpose device
+```
+Device (Pi Zero 2W)
+  ├── Local learning plan (SQLite + sqlite-vec semantic cache)
+  ├── Porcupine wake word → Silero VAD
+  ├── Audio → OpenAI-compatible server (STT + inference)
+  ├── In-plan? → local content + server response
+  ├── Off-plan new area? → queue for WiFi download
+  ├── Piper TTS → speaker
+  └── Session sync → parent dashboard on WiFi
+```
+
+### Server (OpenAI-compatible, not on device)
+- STT: Whisper base
+- Inference: Claude Sonnet / GPT / Gemma mix
+- Per-child profiles, learning plans, parent dashboard
+
+---
+
+## Key Design Decisions
+
+- **Greyscale e-ink** — better text contrast than colour options; Kaleido 3 actively degrades text
+- **Pi Zero 2W over ESP32-S3** — local learning plan corpus requires filesystem + Python
+- **Suspend-to-RAM** — 2s wake, image retained on e-ink; not hard power-off
+- **Socratic interaction model** — questions before answers, hint ladder, no sycophancy
+- **Per-child device identity** — no login; device MAC = child profile on server
+- **Semantic cache** — 70-90% of in-plan queries answered without network round-trip
+- **Offline-first for known content** — new topic areas download opportunistically
 
 ---
 
 ## Status
 
-Early design — requirements being gathered.
+Early design — see [docs/design-notes.md](docs/design-notes.md) for full research-backed spec.
 
-### Open questions
-- [ ] Display size and resolution (7.5" or 10.3" e-ink?)
-- [ ] Compute platform (RP2040 + cloud API? Pi Zero 2W? ESP32-S3?)
-- [ ] STT approach — on-device (Whisper tiny) vs cloud (Whisper API)
-- [ ] Connectivity — WiFi only, or also BLE/LoRa?
-- [ ] Target user — child, adult learner, language learner?
-- [ ] Reticulum integration — share mesh with cyberdeck?
-
----
-
-## Repository Structure
-
-```
-eink-tutor/
-├── hardware/
-│   └── pcb/        # KiCad PCB
-├── firmware/       # MCU firmware
-├── software/       # Application
-├── docs/           # BOM, design notes, research
-└── references/     # Datasheets
-```
+- [ ] PCB schematic
+- [ ] Enclosure design
+- [ ] Server software
+- [ ] Device firmware / application
+- [ ] First build
