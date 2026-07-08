@@ -1,7 +1,7 @@
 # E-ink Tutor — Design Document
 
 Research-backed design for an open-hardware AI educational device.
-Last updated: 2026-07-08
+Last updated: 2026-07-08 — decisions: multi-day battery, touch+buttons, 6 devices
 
 ---
 
@@ -23,16 +23,31 @@ A dedicated per-child learning device. Child asks questions by voice, receives w
 ## Architecture
 
 ```
-Per-child device (Pi Zero 2W)
-  ├── Local learning plan (SQLite + sqlite-vec semantic index)
-  ├── Porcupine wake word → Silero VAD
-  ├── Audio → OpenAI-compatible server (STT + inference)
-  ├── In-plan? → serve from local content + server inference
-  ├── Off-plan new area? → flag, queue content download on WiFi
-  ├── Session log → parent dashboard (server-side, on WiFi sync)
-  ├── E-ink display (7.5" 800×480)
-  └── Piper TTS → speaker (PAM8302 amp)
+Per-child device
+  ├── ESP32-S3 (always-on, ~25mA)
+  │     ├── WakeNet9 wake word detection
+  │     ├── Powers Pi Zero 2W via TPS22918 on wake word
+  │     └── Returns to WakeNet after Pi shuts down
+  │
+  └── Pi Zero 2W (hard-off between sessions)
+        ├── Local learning plan (SQLite + sqlite-vec semantic index)
+        ├── Silero VAD → audio → OpenAI-compatible server (STT + inference)
+        ├── In-plan? → serve from local content + server inference
+        ├── Off-plan new area? → flag, queue content download on WiFi
+        ├── Session log → parent dashboard (server-side, on WiFi sync)
+        ├── E-ink display (7.5" 800×480) via SPI HAT
+        ├── Touch (GT911) + 5 physical buttons
+        └── Piper TTS → PAM8302 → speaker
 ```
+
+**Sleep/wake cycle:**
+1. ESP32-S3 listens for wake word at ~25mA (WakeNet9)
+2. Wake word detected → ESP32-S3 asserts TPS22918 EN → Pi boots (~10s DietPi)
+3. Pi handles full session (STT, inference, display, TTS)
+4. Session ends → Pi signals ESP32-S3 → graceful shutdown → TPS22918 cuts Pi rail
+5. ESP32-S3 back to WakeNet listening
+
+**Battery life:** 6000mAh cell, ESP32-S3 at 25mA standby + 1hr active Pi/day → ~5-7 days between charges.
 
 ### Server (OpenAI-compatible, not on device)
 - STT: Whisper base (or OpenAI Whisper API)
@@ -45,12 +60,23 @@ Per-child device (Pi Zero 2W)
 
 ## Hardware
 
-### Compute: Raspberry Pi Zero 2W
-- Chosen over ESP32-S3 because device must hold and reason over a local learning plan corpus
-- Suspend-to-RAM between sessions (~2s wake, ~60-80mA suspend) — not hard off
-- DietPi image for fast boot and reduced idle power
-- Python development — fastest iteration for evolving educational content logic
+### Compute: Pi Zero 2W + ESP32-S3 co-processor
+
+**ESP32-S3 (WROOM-1 module) — always-on co-processor:**
+- WakeNet9 wake word detection at ~25mA continuous
+- Powers Pi Zero 2W via TPS22918 load switch on wake word
+- Handles graceful Pi shutdown handshake (UART)
+- E-ink image retained during Pi-off (bistable display)
+- Deep sleep option available between wake word windows (~8µA)
+
+**Raspberry Pi Zero 2W — session compute:**
+- Holds and reasons over local learning plan (SQLite + sqlite-vec)
+- Full Python stack — fastest iteration for educational content logic
+- DietPi image — ~10s cold boot
+- Hard power-off between sessions (zero draw, not suspend)
 - Proven reference: wyoming-satellite (Pi Zero 2W + mic → WiFi → remote STT)
+
+**Why not Pi suspend-to-RAM:** 60-80mA continuous on 6000mAh = ~3.5 days maximum standby. Multi-day target requires hard-off. ESP32-S3 co-processor solves the wake latency problem (WakeNet detection is instant; Pi boots in background while ESP32-S3 plays a "waking up" audio cue).
 
 ### Display: Waveshare 7.5" HAT V2
 - 800×480, 124 PPI, greyscale (B/W + 4 grey levels)
@@ -83,16 +109,25 @@ Per-child device (Pi Zero 2W)
 - Better than WebRTC VAD for children's hesitant speech patterns
 - End-of-speech: trigger after 600-800ms silence
 
+### Physical Buttons
+5 buttons on enclosure:
+- **Power** — long press to power on/off
+- **Hold-to-speak** — push and hold to record question (alternative to wake word)
+- **Repeat** — replay last TTS response
+- **Volume up / Volume down** — PAM8302 gain control via ESP32-S3 GPIO
+
 ### Power
-- **Cell:** 4400mAh LiPo pouch (Adafruit 1578 or equivalent) — ~2-3 day standby
-- **Charging:** MCP73831 (custom PCB) or TP4056+DW01A module (prototype) via USB-C
+- **Cell:** 6000mAh LiPo pouch — ~5-7 day standby (ESP32-S3 at 25mA + 1hr Pi/day)
+- **Charging:** MCP73831 via USB-C — multi-day cadence, charge weekly
 - **Boost:** TPS61023 (3.7V → 5V, 94% efficiency) for Pi rail
-- **Load switch:** TPS22918 for Pi 5V (inrush control — mandatory, Pi has large input caps)
-- **LDO:** AP2112K-3.3 for logic rail
-- **Sleep strategy:** Pi suspend-to-RAM (~60-80mA), e-ink DEEP_SLEEP command after every refresh (2µA, image retained), Porcupine always-on on Pi (~5% CPU)
+- **Load switch:** TPS22918 for Pi 5V — inrush control mandatory (Pi has large input caps)
+- **LDO:** AP2112K-3.3 for ESP32-S3 3.3V rail
+- **E-ink sleep:** DEEP_SLEEP command after every refresh (2µA, image retained indefinitely)
+- **Graceful shutdown:** Pi signals ESP32-S3 via UART when safe to cut power — prevents SD card corruption
 
 ### PCB
-- Custom carrier: Pi Zero 2W header, SPH0645 I2S mic, GT911 touch I2C, PAM8302 I2S amp, MCP73831 charger, TPS61023 boost, USB-C input, battery connector, speaker connector
+- Custom carrier for 6 devices — justified at this quantity
+- Pi Zero 2W 40-pin header, ESP32-S3 WROOM-1 module, SPH0645 I2S mic, GT911 touch I2C, PAM8302 I2S amp, 5× tactile buttons, MCP73831 charger, TPS61023 boost, TPS22918 load switch, USB-C input, battery connector, speaker connector
 - 2-layer, JLCPCB fabrication
 
 ---
@@ -161,31 +196,41 @@ Per-child device (Pi Zero 2W)
 | Compute | Raspberry Pi Zero 2W | £15 |
 | Display | Waveshare 7.5" e-Paper HAT V2 | £45 |
 | Touch overlay | GT911 capacitive overlay + controller | £18 |
-| Microphone | SPH0645LM4H breakout or bare IC | £3 |
+| Co-processor | ESP32-S3 WROOM-1 | £3 |
+| Microphone | SPH0645LM4H bare IC | £3 |
 | TTS amp | PAM8302 | £1 |
 | Speaker | 40mm 4Ω 3W | £3 |
-| Battery | 4400mAh LiPo pouch | £18 |
-| Charger IC | MCP73831 (or TP4056 module) | £1 |
+| Physical buttons | 5× tactile switch + caps | £3 |
+| Battery | 6000mAh LiPo pouch | £22 |
+| Charger IC | MCP73831 | £1 |
 | Boost converter | TPS61023 | £2 |
 | Load switch | TPS22918 | £1 |
-| PCB fabrication | 2-layer, JLCPCB, 5 off | £8 |
-| PCB components | Passives, connectors, headers | £8 |
+| LDO | AP2112K-3.3 | £1 |
+| PCB fabrication | 2-layer, JLCPCB, 10 off (2 revisions × 5) | £10 |
+| PCB components | Passives, connectors, headers | £10 |
 | Enclosure | 3D-printed TPU bumper + PLA shell | £10 |
 | USB-C port, misc | — | £5 |
-| **Total per device** | | **~£138** |
+| **Total per device** | | **~£154** |
 
-Working budget: **~£150 per device** with contingency.
+**6 devices total: ~£924**
+Working budget: **~£160 per device** with contingency.
 
 ---
 
+## Decisions Made
+
+- **Battery:** 6000mAh, multi-day cadence (~5-7 days), charge weekly
+- **Input:** Touch (GT911) + 5 physical buttons (power, hold-to-speak, repeat, vol+, vol-)
+- **Quantity:** 6 devices — custom PCB justified
+
 ## Open Questions
 
-- [ ] Charging cadence — nightly USB-C (phone-like) or multi-day (Kindle-like)?
-- [ ] Physical buttons — power only, or also volume/repeat?
-- [ ] Touch panel vs physical buttons for navigation (touch adds GT911 + overlay complexity)
-- [ ] Enclosure drop-resistance — TPU bumper sufficient, or need Mobius plastic panel (~£130 premium)?
-- [ ] Speaker placement — front-facing vs side-firing in enclosure?
-- [ ] Piper TTS voice selection — child-friendly voice, language options?
+- [ ] Enclosure drop-resistance — TPU bumper sufficient, or need Mobius plastic panel (~£130 premium per device)?
+- [ ] Speaker placement — front-facing vs side-firing?
+- [ ] Piper TTS voice — child-friendly voice options, language requirements?
+- [ ] Pi cold boot UX — audio cue from ESP32-S3 during ~10s boot; what should it play/say?
+- [ ] Wake word — custom ("Hey Tutor"?) or standard ("Hey Siri"-style)?
+- [ ] Server hosting — home server always-on, or cloud fallback when server is down?
 
 ---
 
