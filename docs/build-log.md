@@ -7,7 +7,7 @@
 - Reference design: [CM Deck](https://github.com/sb-ocr/cmdeck) by sb-ocr
 - Form factor: clamshell, 3D-printed enclosure
 - Display: 12.3" ultrawide eDP, no touch (same footprint as CM Deck)
-- Keyboard: Kailh Choc V1, QMK
+- Keyboard: Kailh Choc V1, QMK, 75% layout (~84 keys, F-row + arrows + nav column)
 - Power: 2× 21700 parallel → boost to 12V
 - Cooling: 30mm PWM blower + rear vent slots (passive insufficient in sealed clamshell)
 - Module compatibility: carrier PCB will support full Orin SO-DIMM family (Nano 4GB/8GB, NX 8GB/16GB)

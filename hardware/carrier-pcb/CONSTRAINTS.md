@@ -26,7 +26,7 @@
 - USB-A: 1× for peripherals
 - Gigabit Ethernet: RJ45 (optional — may omit for space)
 - M.2 M-key 2280: NVMe SSD
-- FPC connector to keyboard PCB
+- FPC connector to keyboard PCB (75% layout, ~84 keys, Kailh Choc V1, QMK)
 - No trackpad — removed, redundant on TUI-only machine
 
 ## Mesh Radio (RNode)

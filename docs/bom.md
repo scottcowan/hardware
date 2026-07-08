@@ -44,13 +44,16 @@ Working budget: **~£850–900** including one PCB re-spin contingency.
 
 ## Keyboard
 
+75% layout — alpha + F-row + arrow keys + nav column (Del, PgUp, PgDn, Home, End).
+Fits naturally in the 12.3" ultrawide lower shell.
+
 | Item | Part | Qty | Source | Est. Price |
 |---|---|---|---|---|
-| Switches | Kailh Choc V1 | 54 | Mechboards.co.uk | £30 |
-| Keycaps | MBK blanks | 54 | Mechboards.co.uk | £25 |
+| Switches | Kailh Choc V1 | 84 | Mechboards.co.uk | £45 |
+| Keycaps | MBK blanks | 84 | Mechboards.co.uk | £35 |
 | Keyboard MCU | RP2040 | 1 | LCSC | £2 |
 | FPC connector | 24-pin 0.5mm pitch | 2 | LCSC | £1 |
-| **Subtotal** | | | | **£58** |
+| **Subtotal** | | | | **£83** |
 
 ---
 
@@ -151,7 +154,7 @@ Working budget: **~£850–900** including one PCB re-spin contingency.
 | Dev phase (bench validation) | £273 |
 | Core (module + SSD) | £247 |
 | Display | £63–103 |
-| Keyboard | £58 |
+| Keyboard (75%) | £83 |
 | Power | £23 |
 | Carrier PCB ICs | £31 |
 | RNode (on carrier) | £17 |
@@ -159,9 +162,9 @@ Working budget: **~£850–900** including one PCB re-spin contingency.
 | Enclosure | £43 |
 | PCB fabrication | £38 |
 | Misc | £28 |
-| **Total** | **~£831–871** |
+| **Total** | **~£856–896** |
 | PCB re-spin contingency | £40 |
-| **Working budget** | **~£900** |
+| **Working budget** | **~£940** |
 
 ---
 
