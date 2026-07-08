@@ -14,8 +14,10 @@ Work in progress — prices approximate, sourced from JLCPCB/Mouser/AliExpress.
 
 | Item | Part | Notes |
 |---|---|---|
-| Display | 10–12" eDP panel | TBD — target 1920×1200 IPS |
+| Display | 12.3" eDP ultrawide, no touch | Target 1920×720 or 2560×720 IPS — same footprint as CM Deck reference |
 | eDP cable | 30-pin eDP FPC | Match panel spec |
+
+> No touchscreen — digitizer layer removed, simplifies carrier PCB and enclosure.
 
 ## Keyboard
 
@@ -49,6 +51,14 @@ Work in progress — prices approximate, sourced from JLCPCB/Mouser/AliExpress.
 | OLED controller | SH1106 / SSD1306 | 1.3" status display |
 | ESD protection | TPD4EUSB30 | All USB lines |
 
+## Cooling
+
+| Item | Part | Notes |
+|---|---|---|
+| Fan | 30×30×7mm blower (4-pin PWM) | Exhausts through rear vent slots |
+| Fan header | 4-pin 2.54mm JST | On carrier PCB, PWM from Jetson GPIO |
+| Heatsink | Jetson Orin Nano passive heatsink | Direct module contact |
+
 ## Enclosure
 
 | Item | Notes |
@@ -57,6 +67,7 @@ Work in progress — prices approximate, sourced from JLCPCB/Mouser/AliExpress.
 | Heat-set inserts | M3, ~30 off |
 | Screws | M3×6, M3×10 assorted |
 | Trackpad | Cirque 40mm TM040040 |
+| Vent slots | Rear shell, aligned with 30mm blower exhaust |
 
 ## PCB Fabrication (JLCPCB estimate)
 
