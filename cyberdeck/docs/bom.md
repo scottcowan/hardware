@@ -33,12 +33,14 @@ Working budget: **~£850–900** including one PCB re-spin contingency.
 
 | Item | Part | Source | Est. Price |
 |---|---|---|---|
-| Display | 12.3" ultrawide eDP, no touch | TBD | £60–100 |
-| eDP FPC cable | 30-pin eDP FPC, match panel spec | LCSC | £3 |
-| **Subtotal** | | | **£63–103** |
+| Display | BOE NV127H4M-NX1 — 12.7" ultrawide eDP 1.4 4-lane, 2880×864, 500 nit, 120Hz, no touch | AliExpress | £35–45 |
+| eDP FPC cable | 40-pin eDP, NV127H4M-NX1 spec | LCSC | £3 |
+| **Subtotal** | | | **£38–48** |
 
-> No touchscreen — redundant on TUI machine, simplifies PCB and enclosure.  
-> Target: 1920×720 or 2560×720 IPS, ~300 nit. Panel TBD — confirm spec before ordering eDP cable.
+> No touchscreen — redundant on TUI machine.  
+> Panel confirmed: BOE NV127H4M-NX1, eDP 1.4 4-lane 40-pin, ADS (IPS-type), 12.7" — 4mm wider than CM Deck reference, minor enclosure adjustment needed.  
+> Alternative: VSDISPLAY K003374 kit (panel + controller) ~£45, useful for bench validation before carrier PCB.  
+> Note: true 12.3" ultrawide eDP panels do not exist in the consumer supply chain — all 12.3" ultrawide panels use automotive LVDS or GMSL.
 
 ---
 
@@ -153,7 +155,7 @@ Fits naturally in the 12.3" ultrawide lower shell.
 |---|---|
 | Dev phase (bench validation) | £273 |
 | Core (module + SSD) | £247 |
-| Display | £63–103 |
+| Display (BOE NV127H4M-NX1) | £38–48 |
 | Keyboard (75%) | £83 |
 | Power | £23 |
 | Carrier PCB ICs | £31 |
@@ -162,9 +164,9 @@ Fits naturally in the 12.3" ultrawide lower shell.
 | Enclosure | £43 |
 | PCB fabrication | £38 |
 | Misc | £28 |
-| **Total** | **~£856–896** |
+| **Total** | **~£831–861** |
 | PCB re-spin contingency | £40 |
-| **Working budget** | **~£940** |
+| **Working budget** | **~£900** |
 
 ---
 

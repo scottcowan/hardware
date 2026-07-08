@@ -1,61 +1,33 @@
-# Jetson Cyberdeck
+# hardware
 
-Open-hardware clamshell cyberdeck built around the NVIDIA Jetson Orin Nano 8GB, with a custom carrier PCB, integrated low-profile mechanical keyboard, eDP display, and on-device AI inference via Ollama/llama.cpp.
+Open-hardware projects — custom PCBs, enclosures, and firmware.
 
-Inspired by [CM Deck](https://github.com/sb-ocr/cmdeck) (CC BY-NC-SA 4.0).
+## Projects
 
----
-
-## Hardware Overview
-
-| Component | Detail |
-|---|---|
-| SoM | NVIDIA Jetson Orin Nano 8GB (900-13767-0030-000) |
-| GPU | 1024-core Ampere, 40 TOPS |
-| CPU | 6-core ARM Cortex-A78AE |
-| RAM | 8 GB LPDDR5 |
-| Storage | NVMe SSD via M.2 M-key on carrier |
-| Display | 12.3" ultrawide eDP, no touch (same footprint as CM Deck) |
-| Keyboard | Kailh Choc V1 low-profile, QMK firmware |
-| Trackpad | Cirque 40mm capacitive |
-| Battery | 2× 21700 Li-ion cells (~37Wh) |
-| Power | Boost to 12V, BQ24650 charger, MAX17048 fuel gauge |
-| Enclosure | 3D-printed clamshell ultrawide, McMaster friction hinges (1541A3/1541A4) |
-| Cooling | 30mm PWM blower, rear vent slots |
-| AI runtime | Ollama / llama.cpp (Llama 3.2 3B / 7B quantized) |
+| Project | Description | Status |
+|---|---|---|
+| [cyberdeck](cyberdeck/) | Clamshell ultrawide cyberdeck, Jetson Orin Nano 8GB, local AI inference, Reticulum mesh | In design |
+| [eink-tutor](eink-tutor/) | E-ink educational device with STT, low-power, always-on | In design |
 
 ---
 
 ## Repository Structure
 
 ```
-jetson-cyberdeck/
-├── hardware/
-│   ├── carrier-pcb/        # KiCad project — Jetson carrier board
-│   ├── keyboard-pcb/       # KiCad project — Kailh Choc keyboard
-│   └── enclosure/          # FreeCAD / STL files
-├── firmware/
-│   └── keyboard/           # QMK config for keyboard MCU
-├── software/
-│   └── setup/              # Jetson OS setup scripts, Ollama install
-├── docs/
-│   ├── bom.md              # Bill of materials
-│   ├── power.md            # Power architecture notes
-│   └── build-log.md        # Build progress log
-└── references/             # Datasheets, reference schematics
+hardware/
+├── cyberdeck/          # Jetson Orin Nano 8GB clamshell cyberdeck
+│   ├── hardware/       # KiCad PCBs (carrier, keyboard)
+│   ├── firmware/       # QMK keyboard firmware
+│   ├── software/       # Jetson setup scripts
+│   ├── docs/           # BOM, power, build log, research
+│   └── references/     # Datasheets, reference schematics
+└── eink-tutor/         # E-ink STT educational device
+    ├── hardware/       # KiCad PCB
+    ├── firmware/       # MCU firmware
+    ├── software/       # Application software
+    ├── docs/           # BOM, design notes
+    └── references/     # Datasheets
 ```
-
----
-
-## Status
-
-- [ ] Carrier PCB schematic
-- [ ] Carrier PCB layout
-- [ ] Keyboard PCB
-- [ ] Enclosure design
-- [ ] Power architecture
-- [ ] OS + AI software setup
-- [ ] First build
 
 ---
 
