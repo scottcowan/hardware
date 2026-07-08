@@ -27,6 +27,7 @@
 - Gigabit Ethernet: RJ45 (optional — may omit for space)
 - M.2 M-key 2280: NVMe SSD
 - FPC connector to keyboard PCB
+- No trackpad — removed, redundant on TUI-only machine
 
 ## Mesh Radio (RNode)
 - SX1276 LoRa IC (868MHz EU), SPI to RP2040 MCU

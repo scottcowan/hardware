@@ -19,6 +19,7 @@
 - Active cooling confirmed — 30mm PWM blower exhausting through rear vents
 - SO-DIMM carrier to be pin-compatible with all Orin modules (upgrade path to NX preserved)
 
+- Trackpad removed — redundant on TUI-only machine, saves space and BOM cost
 - Voice input: early research recorded in `docs/research/voice-input.md`
   - MEMS mic (on-board): viable for carrier PCB v1
   - Throat mic (TENQ): bench validate before PCB commitment — connector incompatibility noted
