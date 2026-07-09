@@ -18,6 +18,7 @@ steps=(
   "02-reticulum.sh"
   "03-tui-stack.sh"
   "04-jetson-tweaks.sh"
+  "05-audio.sh"
 )
 
 for script in "${steps[@]}"; do
@@ -33,7 +34,11 @@ echo "================================================"
 echo " Setup complete. Reboot recommended."
 echo " After reboot:"
 echo "   - Terminal auto-attaches to tmux"
-echo "   - 'ai'   → oterm (Ollama TUI)"
-echo "   - 'mesh' → NomadNet (Reticulum)"
-echo "   - 'jtop' → system monitor"
+echo "   - 'ai'        → oterm (Ollama TUI)"
+echo "   - 'mesh'      → NomadNet (Reticulum)"
+echo "   - 'jtop'      → system monitor"
+echo "   - 'vq'        → push-to-talk voice query → Llama 3B"
+echo "   - 'vw'        → always-on wake word mode"
+echo "   - echo hi | tts → text to speech"
+echo "   NOTE: Add Porcupine key to ~/.config/porcupine.env for wake word"
 echo "================================================"
