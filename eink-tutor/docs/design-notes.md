@@ -1,13 +1,13 @@
 # E-ink Tutor — Design Document
 
 Research-backed design for an open-hardware AI educational device.
-Last updated: 2026-07-08 — decisions: multi-day battery, touch+buttons, 6 devices
+Last updated: 2026-07-09 — major revision: CM4 compute, dock station, Minecraft/building mode, server-side inference routing
 
 ---
 
 ## Concept
 
-A dedicated per-child learning device. Child asks questions by voice, receives written responses on e-ink. Follows a structured learning plan, adapts within it, downloads new content areas opportunistically over WiFi. Gentle, focused, distraction-free.
+A dedicated per-child learning device. Portable e-ink tutor for reading and Q&A. Docks into a full workstation with monitor, keyboard, mouse for Minecraft, coding, and making. All inference runs on the house server — device is a thin client.
 
 ---
 
@@ -15,232 +15,305 @@ A dedicated per-child learning device. Child asks questions by voice, receives w
 
 - **Age:** 6+ (literacy assumed)
 - **Use:** Unsupervised, per-child device
-- **Subjects:** Broad syllabus following child's interests, relating to personal examples
+- **Subjects:** Broad syllabus following child's interests — including Minecraft, coding, making
 - **Supervision:** Parental controls + session replay dashboard, no adult present during use
+- **Quantity:** 6 devices
+
+---
+
+## Dual-Mode Design
+
+```
+Portable mode (e-ink, battery)          Docked mode (HDMI monitor, powered)
+─────────────────────────────           ───────────────────────────────────
+Reading, Q&A tutoring                   Minecraft Java → GeyserMC server
+Voice interaction (wake word)           Scratch, Python, browser coding tools
+E-ink display, Piper TTS                Full desktop (Labwc/Wayfire compositor)
+Porcupine wake word                     Keyboard + mouse via dock USB-A
+2-3 day battery (light use)             Powered from dock — no battery drain
+```
+
+The e-ink display stays active when docked — shows current challenge or tutor prompt as secondary display while Minecraft runs on the HDMI monitor.
 
 ---
 
 ## Architecture
 
 ```
-Per-child device
+Per-child device (CM4)
   ├── ESP32-S3 (always-on, ~25mA)
   │     ├── WakeNet9 wake word detection
-  │     ├── Powers Pi Zero 2W via TPS22918 on wake word
-  │     └── Returns to WakeNet after Pi shuts down
+  │     ├── Powers CM4 via TPS22918 load switch on wake word
+  │     └── Returns to WakeNet after CM4 shuts down
   │
-  └── Pi Zero 2W (hard-off between sessions)
+  └── CM4 (hard-off between portable sessions; always-on when docked+powered)
         ├── Local learning plan (SQLite + sqlite-vec semantic index)
-        ├── Silero VAD → audio → OpenAI-compatible server (STT + inference)
-        ├── In-plan? → serve from local content + server inference
+        ├── Silero VAD → audio → house server (STT + inference)
+        ├── In-plan? → serve from local content + server Llama 3B
         ├── Off-plan new area? → flag, queue content download on WiFi
         ├── Session log → parent dashboard (server-side, on WiFi sync)
-        ├── E-ink display (7.5" 800×480) via SPI HAT
+        ├── E-ink display (7.5" 800×480) via SPI
         ├── Touch (GT911) + 5 physical buttons
-        └── Piper TTS → PAM8302 → speaker
+        ├── Piper TTS → PAM8302 → speaker
+        ├── HDMI → dock → monitor (docked mode)
+        ├── USB-C alt mode → dock → keyboard + mouse
+        └── Minecraft Java (PojavLauncher) → Pterodactyl GeyserMC server
 ```
 
-**Sleep/wake cycle:**
-1. ESP32-S3 listens for wake word at ~25mA (WakeNet9)
-2. Wake word detected → ESP32-S3 asserts TPS22918 EN → Pi boots (~10s DietPi)
-3. Pi handles full session (STT, inference, display, TTS)
-4. Session ends → Pi signals ESP32-S3 → graceful shutdown → TPS22918 cuts Pi rail
-5. ESP32-S3 back to WakeNet listening
+---
 
-**Battery life:** 6000mAh cell, ESP32-S3 at 25mA standby + 1hr active Pi/day → ~5-7 days between charges.
+## House Server Stack
 
-### Server (OpenAI-compatible, not on device)
-- STT: Whisper base (or OpenAI Whisper API)
-- Inference: Claude Sonnet / GPT / Gemma 4:12B mix
-- Per-child profiles: interests, reading level, mastery state, session history
-- Learning plan generation and content package creation
-- Parent dashboard API
+```
+House server
+  ├── Ollama (Llama 3B) — routine Q&A inference, fast + free
+  ├── cyberharness router — routes local vs cloud per request type
+  ├── etutor-server — device API, profiles, content packages, dashboard
+  ├── Pterodactyl — Minecraft server management
+  │     └── Paper + GeyserMC — Java server, Bedrock iPad clients connect transparently
+  └── Calibre-Web — per-child book libraries + recommendations
+```
+
+**Inference routing:**
+
+| Request type | Model | Reason |
+|---|---|---|
+| Daily Q&A, hint ladder, in-session dialogue | Llama 3B (Ollama) | Conversational, fast, free |
+| New content area generation | Cloud (Claude/GPT) | Depth + accuracy |
+| Learning plan creation/update | Cloud | Structured reasoning |
+| Book recommendations | Cloud | Cross-reference interest graph |
+| Parent dashboard summaries | Cloud | Report generation |
+| Interest graph inference | Llama 3B | Pattern matching |
+| Building mode guidance | Llama 3B + guardrails | Routine making help |
+| Dangerous/ambiguous building requests | Cloud + flag | Safety review |
+
+Both cyberdeck and etutor devices are clients of the same cyberharness router. Cyberdeck additionally has local Llama 3B for offline/off-network use; etutor devices are always home-network-dependent.
 
 ---
 
 ## Hardware
 
-### Compute: Pi Zero 2W + ESP32-S3 co-processor
+### Compute: CM4 + ESP32-S3 co-processor
 
-**ESP32-S3 (WROOM-1 module) — always-on co-processor:**
-- WakeNet9 wake word detection at ~25mA continuous
-- Powers Pi Zero 2W via TPS22918 load switch on wake word
-- Handles graceful Pi shutdown handshake (UART)
-- E-ink image retained during Pi-off (bistable display)
-- Deep sleep option available between wake word windows (~8µA)
+**CM4 (user has modules):**
+- 4GB RAM — sufficient for Minecraft Java via PojavLauncher
+- PCIe → M.2 NVMe for fast storage (Minecraft needs it)
+- Native HDMI output → dock → monitor
+- USB-C with alt mode → single-cable dock connection
+- Gigabit Ethernet on carrier (fast server connection when docked)
+- 2× Hirose DF40C-100DS-0.4V connectors on carrier PCB
+- Full Wayland desktop when docked (Labwc or Wayfire)
 
-**Raspberry Pi Zero 2W — session compute:**
-- Holds and reasons over local learning plan (SQLite + sqlite-vec)
-- Full Python stack — fastest iteration for educational content logic
-- DietPi image — ~10s cold boot
-- Hard power-off between sessions (zero draw, not suspend)
-- Proven reference: wyoming-satellite (Pi Zero 2W + mic → WiFi → remote STT)
+**ESP32-S3 (WROOM-1) — always-on co-processor:**
+- WakeNet9 wake word at ~25mA continuous
+- Powers CM4 via TPS22918 load switch on wake word
+- Graceful CM4 shutdown handshake via UART
+- E-ink image retained during CM4-off (bistable)
+- Plays audio boot cue via I2S while CM4 boots (~15-20s)
 
-**Why not Pi suspend-to-RAM:** 60-80mA continuous on 6000mAh = ~3.5 days maximum standby. Multi-day target requires hard-off. ESP32-S3 co-processor solves the wake latency problem (WakeNet detection is instant; Pi boots in background while ESP32-S3 plays a "waking up" audio cue).
+**Why CM4 over Pi Zero 2W:**
+- Minecraft requires 4GB RAM — Zero 2W (512MB) cannot run it
+- Native USB-C alt mode → clean single-cable dock
+- You already have the modules
+- Better desktop experience when docked
+- Same carrier PCB approach as cyberdeck — proven pattern
 
-### Display: Waveshare 7.5" HAT V2
-- 800×480, 124 PPI, greyscale (B/W + 4 grey levels)
-- SPI HAT — plugs directly onto Pi Zero 2W 40-pin header, zero wiring
-- Greyscale chosen over colour — better contrast for text, no refresh penalty
-- Colour e-ink (Kaleido 3) actively worse for reading text — grey cast, lower PPI
-- 18-24pt fonts at 124 PPI: adequate for ages 6+
-- Partial refresh: ~0.3s per GDEY075T7 spec; A2 fast mode feasible with custom LUTs
-- Physical dimensions: 170×111mm bare panel, ~280-350g finished device
-- **Touch:** GT911 capacitive overlay (~£15-20 on AliExpress) over glass for navigation
+### Display: Waveshare 7.5" e-Paper HAT V2
+- 800×480, 124 PPI, greyscale
+- SPI via CM4 carrier PCB
+- GT911 capacitive touch overlay
+- 18-24pt fonts adequate for ages 6+
+- Partial refresh ~0.3s; A2 mode ~120ms
+- DEEP_SLEEP after every refresh (2µA, image retained)
+- Secondary display when docked — shows tutor prompt / current challenge
+
+### Dock Station
+- Single USB-C cable from device (alt mode: video + data + power)
+- HDMI-A out → monitor
+- 2× USB-A → keyboard + mouse
+- USB-C PD in → charges device while docked
+- PTN3460 DP→HDMI bridge on carrier PCB for alt mode
+- 3D-printed cradle enclosure, passive USB-C breakout PCB
+- **BOM: ~£18**
 
 ### Microphone: SPH0645LM4H (I2S MEMS)
-- 65dB SNR — meaningfully better than INMP441 for noisy environments
-- 4-wire I2S: BCLK/LRCLK/DATA → Pi GPIO 18/19/20
+- 65dB SNR
+- 4-wire I2S → CM4 carrier
 - On-board PCB mount in enclosure bezel
 
-### Audio Output: Piper TTS + PAM8302 amp
-- Piper TTS — offline neural TTS, runs on Pi Zero 2W, ~150ms latency
-- PAM8302 — 2.5W mono class D amp, I2S input, tiny package
-- Small 40mm speaker in enclosure
-
-### Wake Word: Porcupine (Picovoice)
-- Official Pi Zero 2W support confirmed
-- <5% CPU on single Cortex-A core
-- Multi-language support (important for non-English families)
-- Free tier for prototype; paid for production
-
-### VAD: Silero VAD
-- 2MB ONNX model, <1ms per 30ms frame
-- Better than WebRTC VAD for children's hesitant speech patterns
-- End-of-speech: trigger after 600-800ms silence
+### Audio Output: Piper TTS + PAM8302
+- Piper TTS offline neural TTS, ~150ms latency on CM4
+- PAM8302 2.5W mono class D amp
+- 40mm speaker in enclosure
+- ESP32-S3 plays boot chime independently before CM4 is ready
 
 ### Physical Buttons
-5 buttons on enclosure:
-- **Power** — long press to power on/off
-- **Hold-to-speak** — push and hold to record question (alternative to wake word)
+- **Power** — long press
+- **Hold-to-speak** — alternative to wake word
 - **Repeat** — replay last TTS response
-- **Volume up / Volume down** — PAM8302 gain control via ESP32-S3 GPIO
+- **Volume up / Volume down**
 
 ### Power
-- **Cell:** 6000mAh LiPo pouch — ~5-7 day standby (ESP32-S3 at 25mA + 1hr Pi/day)
-- **Charging:** MCP73831 via USB-C — multi-day cadence, charge weekly
-- **Boost:** TPS61023 (3.7V → 5V, 94% efficiency) for Pi rail
-- **Load switch:** TPS22918 for Pi 5V — inrush control mandatory (Pi has large input caps)
-- **LDO:** AP2112K-3.3 for ESP32-S3 3.3V rail
-- **E-ink sleep:** DEEP_SLEEP command after every refresh (2µA, image retained indefinitely)
-- **Graceful shutdown:** Pi signals ESP32-S3 via UART when safe to cut power — prevents SD card corruption
+- **Cell:** 6000mAh LiPo pouch — ~2-3 days portable (CM4 heavier than Zero 2W)
+- **Charging:** MCP73831 via USB-C, or from dock (pass-through PD)
+- **Boost:** TPS61023 (3.7V → 5V) for CM4 rail
+- **Load switch:** TPS22918 — inrush control mandatory for CM4
+- **LDO:** AP2112K-3.3 for ESP32-S3 rail
+- **Docked:** powered from dock, battery not used — unlimited session length
 
-### PCB
-- Custom carrier for 6 devices — justified at this quantity
-- Pi Zero 2W 40-pin header, ESP32-S3 WROOM-1 module, SPH0645 I2S mic, GT911 touch I2C, PAM8302 I2S amp, 5× tactile buttons, MCP73831 charger, TPS61023 boost, TPS22918 load switch, USB-C input, battery connector, speaker connector
-- 2-layer, JLCPCB fabrication
+### Carrier PCB
+- 4-layer (CM4 requires it — high-speed PCIe, USB 3.0)
+- CM4 2× DF40C-100DS-0.4V connectors
+- M.2 M-key NVMe slot
+- PTN3460 DP alt mode bridge
+- USB-C receptacle (alt mode + PD)
+- HDMI-A for dock pass-through
+- Gigabit Ethernet (RJ45)
+- SPI for e-ink, I2C for GT911 touch
+- SPH0645 I2S mic, PAM8302 I2S amp
+- ESP32-S3 WROOM-1, TPS22918, TPS61023, MCP73831
+- 5× tactile buttons
+- JLCPCB fabrication — reference: Waveshare CM4 carrier open schematics
+
+---
+
+## Minecraft / Building Mode
+
+### Server Setup (Pterodactyl)
+- Paper + GeyserMC on Pterodactyl — iPad Bedrock clients and CM4 Java clients connect to same server
+- ComputerCraft mod — Lua programmable turtles, strongest coding hook for this age
+- ComputerCraft web IDE plugin — child writes Lua in browser (iPad Safari or device browser), turtle executes in-game
+- etutor-server ↔ Minecraft via:
+  - Pterodactyl REST API (server start/stop, status)
+  - RCON (in-game commands — give items, teleport, set time)
+  - Paper plugin webhook (build completions → POST to etutor-server)
+
+### Educational Challenge System
+- AI acts as dungeon master — sets build challenges tied to curriculum topic
+- Challenge delivered as NPC dialogue or in-game chat
+- On challenge completion: plugin POSTs event → etutor-server logs achievement, updates mastery, generates next challenge
+- Examples by subject:
+
+| Subject | Challenge |
+|---|---|
+| Maths | Build a structure using exactly 144 blocks (12²) |
+| Geography | Recreate your town's layout from a map |
+| History | Build a Roman arch — what makes it strong? |
+| Physics | Build a redstone circuit that turns a light on and off |
+| Programming | Write a ComputerCraft turtle program to build a wall |
+| Biology | Build a cross-section of a plant cell at 1:10 scale |
+
+### Building Mode Guardrails
+
+Separate guardrail profile from tutoring mode — building is child-led so off-topic surface area is larger:
+
+| Request type | Response |
+|---|---|
+| Normal making/building help | Full assistance, age-appropriate complexity |
+| Dangerous physical instructions (explosives, weapons) | Hard block — "I can't help with that, but let's build X instead" |
+| Physically risky but normal (fire, electricity) | Assist + "ask an adult before trying this for real" |
+| Minecraft-specific violence/grief | Gentle redirect — "on this server we build, not destroy" |
+| Roblox | Redirect to Minecraft — Roblox not supported (safety/content reasons) |
+| Scope too advanced for age | Scale down — "let's start with a smaller version" |
+| Off-topic entirely | Gentle focus — "let's finish what we started, then we can explore that" |
+
+Parent dashboard flags all hard blocks and redirects. Child never sees a lecture.
+
+### Minecraft vs Roblox Decision
+- **Roblox: excluded** — platform-curated content, social features with strangers, monetisation-driven, can't fully control what children access
+- **Minecraft: preferred** — server owner controls all content, no external social, educational precedent (Minecraft Education Edition), offline-capable, ComputerCraft for real programming
+
+---
+
+## Inference Routing: Server-Side Only
+
+**The device has no local inference.** All models run on the house server:
+
+- Routine Q&A → Llama 3B on Ollama (fast, free, runs locally)
+- Content generation → Cloud API (Claude Sonnet / GPT / Gemma)
+- etutor-server points `INFERENCE_MODEL` at cyberharness OpenAI-compatible endpoint
+- cyberharness decides local vs cloud — etutor-server doesn't need to know
+
+This applies to both tutoring mode and building/Minecraft mode. The guardrail system prompt is just a different system prompt routed through the same infrastructure.
 
 ---
 
 ## Content Architecture
 
 ### Learning Plan
-- Structured per-child plan: topics, progression, vocabulary, example prompts
-- Stored as SQLite + sqlite-vec semantic index on device
-- Device can flex within plan: answer in-plan questions, adapt pacing, vary examples
-- Semantic search determines "is this in-plan?" (cosine similarity >0.85 threshold)
+- Structured per-child plan stored as SQLite + sqlite-vec on device
+- In-plan queries served from local cache + Llama 3B on server
+- Off-plan: flag → queue → download on WiFi connect
+- Minecraft challenges are part of the learning plan — build challenges tied to curriculum topic
 
-### Off-Plan Handling
-- Out-of-plan question detected → gentle redirect in current session
-- New topic area flagged → queued for download
-- On WiFi connect: server generates content package for new area → syncs to device SQLite
-- Content packages: small structured JSON/markdown, tagged by topic, age-level, reading level
-
-### Offline Capability
-- In-plan queries: fully offline from local SQLite + semantic cache
-- Off-plan queries: server required; device shows "I'll find out more about that" message
-- Piper TTS: fully offline
-- Wake word detection: fully offline
+### Calibre-Web Integration
+- Per-child accounts on house Calibre-Web instance
+- AI cross-references current reading with tutoring topics
+- "You know how the book talked about gravity? That's actually why Minecraft has a fall damage mechanic..."
+- Recommendation engine matches interest graph to library
 
 ---
 
-## Software Design
-
-### Interaction Model
-- **Socratic tutoring** — lead with questions, require verbal answer, never accept silence as understanding
-- **Response length:** max 2-3 sentences for ages 6-8, short paragraph for 9+
-- **Hint ladder:** nudge → hint → explain (3 levels before moving on)
-- **Gentle redirect** for off-topic/inappropriate — acknowledge, steer back naturally
-- **No sycophancy** — "Interesting!" not "Amazing answer!"
-
-### Interest Graph
-- **Onboarding:** Touch screen + pictograms (first session) — child selects interests visually
-- **Ongoing:** Passive inference from conversation topics — server builds interest graph
-- **Age-group trends:** Server incorporates what similar-age children find engaging as signal
-- Interest graph shapes example selection and topic connections server-side
-
-### Session Continuity
-- **Session start:** Device zooms out — "What shall we explore today?" with 2-3 suggested areas based on recent sessions and interest graph
-- **Within-session:** Proactive continuity — "Last time we were talking about volcanoes — did you know they also exist on other planets?"
-- **Cross-session memory:** Server maintains state; device syncs on WiFi connect
-
-### Parental Dashboard (server-side)
-- Session replay: full conversation transcript
-- Learning summary: topics covered, questions asked, apparent sticking points
-- Interest graph visualisation
-- Reading level progression
-- Time spent per session/week
-- Flagged items (off-plan requests, redirect events)
-
-### Per-Child Profile
-- Device identity = child profile (no login needed)
-- Server maps device MAC/ID → child name, age, interests, mastery, reading level
-- Parent sets up profile on server before first use; device onboarding collects interests
-
----
-
-## Bill of Materials (Preliminary)
+## Bill of Materials (Revised — CM4 + Dock)
 
 | Item | Part | Est. Price |
 |---|---|---|
-| Compute | Raspberry Pi Zero 2W | £15 |
+| Compute | CM4 4GB (have modules) | £0 |
+| CM4 connectors | 2× Hirose DF40C-100DS-0.4V | £4 |
 | Display | Waveshare 7.5" e-Paper HAT V2 | £45 |
-| Touch overlay | GT911 capacitive overlay + controller | £18 |
+| Touch overlay | GT911 capacitive overlay | £18 |
+| NVMe SSD | 256GB M.2 2280 | £25 |
 | Co-processor | ESP32-S3 WROOM-1 | £3 |
-| Microphone | SPH0645LM4H bare IC | £3 |
+| Microphone | SPH0645LM4H | £3 |
 | TTS amp | PAM8302 | £1 |
 | Speaker | 40mm 4Ω 3W | £3 |
-| Physical buttons | 5× tactile switch + caps | £3 |
+| Physical buttons | 5× tactile + caps | £3 |
 | Battery | 6000mAh LiPo pouch | £22 |
 | Charger IC | MCP73831 | £1 |
 | Boost converter | TPS61023 | £2 |
 | Load switch | TPS22918 | £1 |
 | LDO | AP2112K-3.3 | £1 |
-| PCB fabrication | 2-layer, JLCPCB, 10 off (2 revisions × 5) | £10 |
-| PCB components | Passives, connectors, headers | £10 |
+| DP alt mode bridge | PTN3460 | £3 |
+| USB-C receptacle | Alt mode + PD | £2 |
+| PCB fabrication | 4-layer, JLCPCB, 10 off | £35 |
+| PCB components | Passives, connectors, headers | £15 |
 | Enclosure | 3D-printed TPU bumper + PLA shell | £10 |
-| USB-C port, misc | — | £5 |
-| **Total per device** | | **~£154** |
+| Misc | — | £5 |
+| **Device subtotal** | | **~£202** |
+| **Dock** | Cradle + USB-C breakout + HDMI + USB-A | **~£18** |
+| **Per-device total** | | **~£220** |
 
-**6 devices total: ~£924**
-Working budget: **~£160 per device** with contingency.
+**6 devices total: ~£1,320**
+Working budget: **~£230 per device** with contingency.
 
 ---
 
 ## Decisions Made
 
-- **Battery:** 6000mAh, multi-day cadence (~5-7 days), charge weekly
-- **Input:** Touch (GT911) + 5 physical buttons (power, hold-to-speak, repeat, vol+, vol-)
-- **Quantity:** 6 devices — custom PCB justified
+- **Compute:** CM4 (modules already owned) — enables Minecraft, proper dock, 4GB RAM
+- **Battery:** 6000mAh, ~2-3 days portable, unlimited docked
+- **Input:** Touch (GT911) + 5 physical buttons + keyboard/mouse when docked
+- **Quantity:** 6 devices
+- **Minecraft:** Java via PojavLauncher → GeyserMC server (iPad Bedrock kids on same server)
+- **Roblox:** Excluded — Minecraft only
+- **Inference:** Server-side only (Llama 3B for routine, Cloud for generation)
+- **Building guardrails:** Separate profile, harder limits than tutoring mode
+- **Dock:** Single USB-C cable, HDMI + USB-A out, PD charging in
 
 ## Open Questions
 
-- [ ] Enclosure drop-resistance — TPU bumper sufficient, or need Mobius plastic panel (~£130 premium per device)?
-- [ ] Speaker placement — front-facing vs side-firing?
-- [ ] Piper TTS voice — child-friendly voice options, language requirements?
-- [ ] Pi cold boot UX — audio cue from ESP32-S3 during ~10s boot; what should it play/say?
-- [ ] Wake word — custom ("Hey Tutor"?) or standard ("Hey Siri"-style)?
-- [ ] Server hosting — home server always-on, or cloud fallback when server is down?
+- [ ] CM4 Lite (no WiFi) vs CM4 standard — Lite needs external WiFi module (~£8), standard has it onboard
+- [ ] ComputerCraft web IDE — which plugin? or browser-based coding environment?
+- [ ] Wake word — "Hey Tutor"? Custom Porcupine training needed
+- [ ] Boot audio cue — what does ESP32-S3 play during CM4 boot?
+- [ ] Enclosure drop-resistance — TPU bumper or Mobius plastic panel?
+- [ ] Speaker placement — front vs side-firing?
+- [ ] Minecraft challenge difficulty calibration — auto-grade by age or manual parent config?
 
 ---
 
 ## Research Sources
 
-All findings from parallel research agents, 2026-07-08:
-
-- **Educational landscape:** ITS effect size d=0.66 (50 studies); OLPC lesson: hardware alone doesn't teach; Moxie $1500 = current AI education hardware ceiling; white space confirmed
-- **STT:** Whisper API $0.006/min; Porcupine on Pi Zero 2W confirmed; Silero VAD superior for children's speech; wyoming-satellite = reference architecture
-- **Display:** Greyscale > Kaleido 3 for text; 7.5" 800×480 124PPI adequate at 18-24pt; partial refresh ~0.3s; A2 mode ~120ms for token-by-token streaming
-- **Compute:** Pi Zero 2W recommended for local content corpus; HeyWillow proves ESP32-S3 architecture; suspend-to-RAM 2s wake preferred over hard-off
-- **Power:** Pi Zero 2W suspend ~60-80mA; e-ink DEEP_SLEEP 2µA; 4400mAh = 2-3 day standby; MCP73831 for charging; TPS22918 inrush control mandatory
-- **Reticulum:** LoRa viable as fallback (650ms at SF7) but WiFi primary; semantic cache handles 70-90% of in-plan queries offline
+- 2026-07-08 parallel research agents: display, compute, STT, educational landscape, power, Reticulum
+- 2026-07-08 deep research (109 agents, 17 verified claims): interleaving d=1.05, retrieval practice, metacognitive development trajectory, dialogic reading β=0.51, cognitive load reversal effect
+- Khan Academy Kids analysis: read-aloud, mastery pacing, session length, anti-sycophancy
